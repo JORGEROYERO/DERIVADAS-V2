@@ -1462,6 +1462,29 @@ function guardarLocal(alumno, estado) {
   } catch (e) {}
 }
 
+// Marca que la copia local ya llegó alguna vez a la hoja. Si después la fila no aparece
+// en la hoja, es porque el docente la borró para reiniciar al estudiante.
+function marcarSincronizado(alumno) {
+  try {
+    localStorage.setItem(claveLocal(alumno) + "_sinc", "1");
+  } catch (e) {}
+}
+
+function estabaSincronizado(alumno) {
+  try {
+    return localStorage.getItem(claveLocal(alumno) + "_sinc") === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+function borrarLocal(alumno) {
+  try {
+    localStorage.removeItem(claveLocal(alumno));
+    localStorage.removeItem(claveLocal(alumno) + "_sinc");
+  } catch (e) {}
+}
+
 // Evita que una multiplicación como "u · v'" quede partida en dos renglones.
 function sinCortes(texto) {
   return texto.replace(/ · /g, "\u00a0·\u00a0");
@@ -1778,6 +1801,11 @@ function PantallaLeccion({ leccion, parte, sinc, onCambiar, onTerminar, onSalir 
             {ultima ? "Ir a los ejercicios guiados" : "Siguiente"}
           </button>
         </div>
+        {parte.iTeoria > 0 && (
+          <div style={{ textAlign: "center" }}>
+            <button className="btn-secundario" onClick={onSalir}>Salir y continuar después</button>
+          </div>
+        )}
         <AvisoGuardado sinc={sinc} />
       </div>
     );
@@ -2002,6 +2030,7 @@ function App() {
         const actual = estadoRef.current;
         const r = await llamarScript({ ...base, accion: "guardar", estado: JSON.stringify(actual), resumen: JSON.stringify(resumenDe(actual)) });
         if (!r || !r.ok) fallo = true;
+        else if (alumnoRef.current) marcarSincronizado(alumnoRef.current);
       } catch (e) {
         fallo = true;
       }
@@ -2040,6 +2069,10 @@ function App() {
       if (r && r.ok && r.estado) {
         const servidor = normalizarEstado(r.estado);
         if (!local || servidor.actualizado > local.actualizado) elegido = servidor;
+      } else if (r && r.ok && !r.estado && local && estabaSincronizado(a)) {
+        // La fila del estudiante ya no está en la hoja: el docente la borró. Se empieza de cero.
+        borrarLocal(a);
+        elegido = null;
       }
       setSinc("ok");
     } catch (e) {
